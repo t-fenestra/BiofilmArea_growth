@@ -33,8 +33,8 @@ ResultTable_SliceY=array2table(zeros(0,7),'VariableNames',{'Experiment','datafil
 
 
 % Files to write results
-OutputFolderLocation='/Users/pichugina/Work/Data_Analysis/Occupied_area_analysis_April_2019/'
-ResultFolder='AreaSlice_ResultFolder_09052019'
+OutputFolderLocation='/Users/pichugina/Work/Data_Analysis/Occupied_area_analysis/BiofilmArea_growth/data/'
+ResultFolder=fullfile(OutputFolderLocation,'AreaSlice_ResultFolder_09052019')
 mkdir(ResultFolder)
 
 %% Read files and perform calculation
@@ -156,8 +156,8 @@ for i=1:length(DirList)
 end
 %%
 
-fileSliceAreaY=fullfile(OutputFolderLocation,ResultFolder,'ResultTable_SliceY.txt');
+fileSliceAreaY=fullfile(OutputFolderLocation,'ResultTable_SliceY.txt');
 writetable(ResultTable_SliceY,fileSliceAreaY);
  
-fileSliceAreaX=fullfile(OutputFolderLocation,ResultFolder,'ResultTable_SliceX.txt');
+fileSliceAreaX=fullfile(OutputFolderLocation,'ResultTable_SliceX.txt');
 writetable(ResultTable_SliceX,fileSliceAreaX);

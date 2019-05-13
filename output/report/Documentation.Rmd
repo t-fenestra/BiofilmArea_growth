@@ -1,31 +1,91 @@
 ---
-title: "Documentation"
+title: "Biofilm colonisation area calculation"
 author: "Tatyana Pichugina"
-date: "5/10/2019"
+date: "5/13/2019"
 output: github_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dplyr)
+library(ggridges)
+library(gridExtra)
+library(stringr)
+library(modelr)
+library(broom)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Integral area
+Sum of the colonize pixel across all data frames.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
-print(cars$speed)
+```{r Integral Area, echo=FALSE, message=FALSE, warning=FALSE}
+# read file 
+AreaY<-read_delim(file='../../data/ResultTable_SliceY.txt',col_names = TRUE,delim=',')
+
+AreaY<-AreaY %>% 
+  # new colums with strain
+  separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
+  mutate(Strain=as.factor(Strain) )%>%
+  # extract data frame
+  mutate(frame=as.numeric(str_split(datafile,'_',simplify = TRUE)[,5]),data_stamp=as.numeric(str_split(datafile,'_',simplify = TRUE)[,3]))
+
+# Integral area
+IntegralArea<-AreaY %>%
+  group_by(Strain,data_stamp,frame) %>%
+  summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),
+            IntAreaLost=sum(SumSliceYlost),IntAreaSame=sum(SumSliceYsame)) %>% 
+  gather(key=Area_type,value='Area',IntAreaTotal,IntAreaGain,IntAreaLost,IntAreaSame,factor_key = TRUE)
+
+
+IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
+  ggplot(aes(x=frame,y=Area,color=Strain))+
+  geom_line(aes(group=data_stamp),size=2)+
+  ggtitle('Sum of areas across all Y-layers ') + 
+  xlab("time frame in minutes") + ylab("Area")+
+  theme_bw(base_size = 12)
+
 ```
 
-## Including Plots
+### After selection only first 15 frames
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+IntegralArea <- IntegralArea %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
+  ggplot(aes(x=frame,y=Area,color=Strain))+
+  geom_line(aes(group=data_stamp),size=2)+
+  ggtitle('Sum of areas across all Y-layers ') + 
+  xlab("time frame in minutes") + ylab("Area")+
+  theme_bw(base_size = 12)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Gain-Lost-Same summary per experiment
+1. Gain represents number of pixels that appear new between consecutive frames.
+2. Lost is number of pixels that lost between two consecutive frames
+3. Same is number of pixels that stays at the same place between two consecutive frames
+
+### dwss sum of colonisation area
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+IntegralArea %>% filter(Strain=='dwss') %>%
+  ggplot(aes(x=frame,y=Area))+
+  geom_line(size=1)+
+  facet_grid(Area_type~data_stamp)+
+  ggtitle('dwss experiment date ') + 
+  xlab("time frame in minutes") + ylab("log Area")+
+  theme_bw(base_size = 12)
+```
+
+### SM sum of colonisation area 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+IntegralArea %>% filter(Strain=='SM') %>%
+  ggplot(aes(x=frame,y=Area))+
+  geom_line(aes(group=data_stamp),size=1)+
+  facet_grid(Area_type~data_stamp)+
+  ggtitle('SM experiment date ') + 
+  xlab("time frame in minutes") + ylab("log Area")+
+  theme_bw(base_size = 12)
+```
+

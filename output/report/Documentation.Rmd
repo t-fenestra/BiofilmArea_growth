@@ -36,9 +36,11 @@ AreaY<-AreaY %>%
 # Integral area
 IntegralArea<-AreaY %>%
   group_by(Strain,data_stamp,frame) %>%
-  summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),
-            IntAreaLost=sum(SumSliceYlost),IntAreaSame=sum(SumSliceYsame)) %>% 
-  gather(key=Area_type,value='Area',IntAreaTotal,IntAreaGain,IntAreaLost,IntAreaSame,factor_key = TRUE)
+  summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),IntAreaLost=sum(SumSliceYlost),
+            IntAreaSame=sum(SumSliceYsame)) %>%
+  mutate(GainTotal=IntAreaGain/IntAreaTotal,LostTotal=IntAreaLost/IntAreaTotal,SameTotal=IntAreaSame/IntAreaTotal) %>%
+  filter(-IntAreaGain,-IntAreaLost,-IntAreaSame) %>%
+  gather(key=Area_type,value='Area',IntAreaTotal,GainTotal,LostTotal,SameTotal,factor_key = TRUE) 
 
 
 IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
@@ -50,8 +52,9 @@ IntegralArea %>% filter(Area_type=='IntAreaTotal') %>%
 
 ```
 
-### After selection only first 15 frames
+#### After selection only first 15 frames
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+AreaY<-AreaY %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
 IntegralArea <- IntegralArea %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
 
 IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
@@ -62,30 +65,71 @@ IntegralArea %>% filter(Area_type=='IntAreaTotal') %>%
   theme_bw(base_size = 12)
 ```
 
-## Gain-Lost-Same summary per experiment
-1. Gain represents number of pixels that appear new between consecutive frames.
-2. Lost is number of pixels that lost between two consecutive frames
-3. Same is number of pixels that stays at the same place between two consecutive frames
+#### Gain-Lost-Same summary per experiment
+1. GainTotal represents proportion of pixels that appear new between consecutive frames to the total number occupied pixels.
+2. LostTotal is a proportion of pixels that lost between two consecutive frames to the total number occupied pixels.
+3. SameTotal is a proportion of pixels that stays at the same place between two consecutive frames to the total number occupied pixels.
+4. IntAreaTotal is a total occupied area.
 
-### dwss sum of colonisation area
+#### dwss sum of colonisation area
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 IntegralArea %>% filter(Strain=='dwss') %>%
   ggplot(aes(x=frame,y=Area))+
   geom_line(size=1)+
-  facet_grid(Area_type~data_stamp)+
-  ggtitle('dwss experiment date ') + 
-  xlab("time frame in minutes") + ylab("log Area")+
-  theme_bw(base_size = 12)
+  facet_grid(Area_type~data_stamp,scales="free_y")+
+  ggtitle('dwss Sum of areas across all Y-layers ') + 
+  xlab("time frame in minutes") + ylab("Area")
+ 
 ```
 
-### SM sum of colonisation area 
+#### SM sum of colonisation area 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 IntegralArea %>% filter(Strain=='SM') %>%
   ggplot(aes(x=frame,y=Area))+
   geom_line(aes(group=data_stamp),size=1)+
-  facet_grid(Area_type~data_stamp)+
-  ggtitle('SM experiment date ') + 
-  xlab("time frame in minutes") + ylab("log Area")+
-  theme_bw(base_size = 12)
+  facet_grid(Area_type~data_stamp,scales="free_y")+
+  ggtitle('SM Sum of areas across all Y-layers ') + 
+  xlab("time frame in minutes") + ylab("Area")
+  
 ```
+
+
+## Colonisation area per Layer 
+LayerSize=32 mkm (200px)
+```{r fig.height=14, fig.width=10, echo=FALSE,message=FALSE, warning=FALSE}
+ggplot(AreaY,aes(x=frame,y=SumSliceY,color=Strain))+
+  geom_line(aes(group=Experiment),size=1)+facet_grid(Layer~.)+
+  theme_bw(base_size = 10)+
+  labs(title="Area per layer from ALI")+
+  ylab("Area per Layer")
+```
+#### Plot shows ratio  between Area per Layer to total colonization area for different time frames
+```{r,fig.height=14, fig.width=12,echo=FALSE,message=FALSE, warning=FALSE}
+AreaTotal<-AreaY %>% group_by(data_stamp,frame,Strain) %>%
+    summarise(AreaTotal=sum(SumSliceY))
+
+AreaYSumSliceY<-AreaY %>% select(data_stamp,Strain,Layer,frame,SumSliceY) %>%
+  inner_join(AreaTotal,by=c("data_stamp","frame","Strain")) %>% 
+  filter(AreaTotal!=0) %>% 
+  mutate(Ratio=SumSliceY/AreaTotal) 
+
+
+AreaYSumSliceY %>% filter(Strain=='dwss') %>%
+  ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+
+  scale_x_reverse()+
+  coord_flip()+
+  facet_grid(frame~data_stamp)+
+  ggtitle('dwss ratio')+
+  theme_gray(base_size = 10)
+  
+AreaYSumSliceY %>% filter(Strain=='SM') %>%
+  ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+
+  scale_x_reverse()+
+  coord_flip()+
+  facet_grid(frame~data_stamp)+
+  ggtitle('SM ratio')+
+  theme_gray(base_size = 10)
+```
+#### Gain-Lost-Same
+
 

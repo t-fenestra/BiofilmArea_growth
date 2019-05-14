@@ -32,18 +32,19 @@ ResultTable_SliceX=array2table(zeros(0,7),'VariableNames',{'Experiment','datafil
 ResultTable_SliceY=array2table(zeros(0,7),'VariableNames',{'Experiment','datafile','Layer','SumSliceY','SumSliceYsame','SumSliceYgain','SumSliceYlost'})
 
 
-% Files to write results
+%Files to write results
 OutputFolderLocation='/Users/pichugina/Work/Data_Analysis/Occupied_area_analysis/BiofilmArea_growth/data/'
-ResultFolder=fullfile(OutputFolderLocation,'AreaSlice_ResultFolder_09052019')
+ResultFolder=fullfile(OutputFolderLocation,'Images')
 mkdir(ResultFolder)
 
 %% Read files and perform calculation
 counterX=1; % used to fill the table
 counterY=1;
 
-for i=1:length(DirList)
+for k=1:length(DirList)
+
     % Read file list in directory
-    fprefix=DirList{i}
+    fprefix=DirList{k}
     
     ImageFolder=fullfile(MainFolder,fprefix);
     filePattern = fullfile(ImageFolder, '*Projection_.tif');
@@ -67,7 +68,7 @@ for i=1:length(DirList)
         %Old=cd(fullfile(ResultFolder,fprefix))
         %mkdir(strcat(fprefix,'_img_gain_lost'));
         %cd(Old)
-        %FolderWithImages=fullfile(ResultFolder,fprefix,strcat(fprefix,'_img_gain_lost'));
+        FolderWithImages=fullfile(ResultFolder,fprefix,strcat(fprefix,'_img_gain_lost'));
         FolderWithImages=fullfile(ResultFolder,fprefix);
 
         
@@ -94,7 +95,7 @@ for i=1:length(DirList)
             
             %------ sum area --------------------%
             LayerNameX=LayerSize:LayerSize:sizX;
-            LayerNameY=(AliYY+LayerSize):LayerSize:sizY;
+            LayerNameY=LayerSize:LayerSize:(NslY*LayerSize); %counted from ALI
             [SumAreaSliceX,SumAreaSliceY]=Sum_slice_from_ali(img,LayerSize,AliYY,NslY,NslX);
 
              %------ overlay gain and lost in area --%

@@ -76,6 +76,7 @@ by_experiment<-IntegralArea %>%
   filter(Area_type=="IntAreaTotal" & Area>0) %>%
   ungroup(data_stamp) %>%
   select(-data_stamp,-Area_type) %>%
+  mutate(frame=60*frame) %>%
   group_by(Experiment) %>%
   nest()
 
@@ -95,30 +96,46 @@ DataPredict<-by_experiment %>%
   mutate(res=pred-Area) %>%
   gather(key="Area_type",value="Area",Area,pred,factor_key = TRUE) 
   
-  
+# plot fit to the data  
 ggplot(DataPredict,aes(x=frame,y=Area,color=Area_type,group=Experiment))+
     geom_line(aes(group=Area_type),size=2)+
     facet_wrap(.~Experiment)
 
+#plot residuals
 ggplot(DataPredict,aes(x=frame,y=res,group=Experiment))+
-  geom_line(size=2)+
+  geom_line(size=1)+
   facet_wrap(.~Experiment)
 
 # coefficients
-coeff<-by_experiment %>%
+Coeff<-by_experiment %>%
   mutate(tidy_model=map(model,broom::tidy)) %>%
-  unnest(tidy_model)
-  
+  unnest(tidy_model) %>%
+  filter(term=="frame") %>%
+  arrange(estimate) %>%
+  separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
+  mutate(Strain=as.factor(Strain))
+ 
 
+  ggplot(Coeff,aes(x=Experiment,y=estimate,fill=Strain,label = Experiment))+
+  geom_bar(stat="identity", position=position_dodge())+
+  geom_errorbar(aes(ymin=estimate-std.error, ymax=estimate+std.error), width=.2,
+                position=position_dodge(.9))+
+  ylab("growth rate 1/min")+
+  xlab("Experiment")+
+  coord_flip()+
+  theme_grey(base_size = 12)
+
+  
 # per model statistics
 glance<-by_experiment %>%
   mutate(glance=map(model,broom::glance)) %>%
-  unnest(glance,.drop=TRUE) %>%
-  arrange(r.squared)
+  unnest(glance,.drop=TRUE) 
 
-glance %>% 
-  ggplot(aes(Experiment, r.squared)) + 
-  geom_jitter(width = 0.5)+coord_flip()  
+glance$Experiment <- factor(glance$Experiment, levels =Coeff$Experiment)
+glance %>% ggplot(aes(y=r.squared,x=by_experiment$Experiment)) + 
+  geom_col()+
+  xlab("Experiment")+
+  coord_flip()
 
 
 

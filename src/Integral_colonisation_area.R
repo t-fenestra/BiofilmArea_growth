@@ -61,81 +61,106 @@ IntegralArea %>% filter(Strain=='SM') %>%
   xlab("time frame in minutes") + ylab("log Area")+
   theme_bw(base_size = 12)
 
-
+IntegralArea_GALI<-AreaY %>%
+  filter(Layer>200 & frame>5) %>%
+  group_by(Strain,Experiment,data_stamp,frame) %>%
+  summarise(IntAreaTotal=sum(SumSliceY)) 
 #========================================================================#
 # Fit linear regression
 #========================================================================#
 # model LogIntArea ~ Intersept + frame
+# model LogIntArea ~ Intersept + frame
 fit_lm<-function(df){
-  lm(log(Area)~frame,data=df)
+  lm(log(IntAreaTotal)~frame,data=df)
 }
-
-
-## nest data by experiments
-by_experiment<-IntegralArea %>%
-  filter(Area_type=="IntAreaTotal" & Area>0) %>%
-  ungroup(data_stamp) %>%
-  select(-data_stamp,-Area_type) %>%
+#======================================
+df<-IntegralArea_GALI
+## 1.nest data by experiments
+by_experiment<-df %>%
+  #exclude points that produced Nans
+  filter(IntAreaTotal>0) %>%
+  #converted frames to the minutes
   mutate(frame=60*frame) %>%
   group_by(Experiment) %>%
   nest()
 
-
-
-
-# calculate approximation coefficients
-by_experiment <- by_experiment %>% 
+#======================================
+# 2. apply model to the data
+by_experiment <- by_experiment %>%
   mutate(model = map(data, fit_lm)) %>%
   mutate(resids = map2(data,model, add_residuals)) %>%
   mutate(predict = map2(data,model, add_predictions))
-  
-  
-DataPredict<-by_experiment %>% 
-  unnest(predict) %>%
-  mutate(pred=exp(pred)) %>%
-  mutate(res=pred-Area) %>%
-  gather(key="Area_type",value="Area",Area,pred,factor_key = TRUE) 
-  
-# plot fit to the data  
-ggplot(DataPredict,aes(x=frame,y=Area,color=Area_type,group=Experiment))+
-    geom_line(aes(group=Area_type),size=2)+
-    facet_wrap(.~Experiment)
 
-#plot residuals
-ggplot(DataPredict,aes(x=frame,y=res,group=Experiment))+
-  geom_line(size=1)+
-  facet_wrap(.~Experiment)
-
-# coefficients
-Coeff<-by_experiment %>%
+#======================================
+# 3. extract coefficients Intersept,frame
+FitCoeff<-by_experiment %>%
   mutate(tidy_model=map(model,broom::tidy)) %>%
   unnest(tidy_model) %>%
-  filter(term=="frame") %>%
-  arrange(estimate) %>%
   separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
   mutate(Strain=as.factor(Strain))
- 
+  
 
-  ggplot(Coeff,aes(x=Experiment,y=estimate,fill=Strain,label = Experiment))+
+#======================================
+# 4. per model statistics
+glance<-by_experiment %>%
+  mutate(glance=map(model,broom::glance)) %>%
+  unnest(glance,.drop=TRUE) %>%
+  select(Experiment,r.squared)
+
+#======================================
+# 5. plot fit to the data and residuals
+DataPredict<-by_experiment %>%
+  unnest(predict) %>%
+  mutate(pred=exp(pred)) %>%
+  mutate(res=pred-IntAreaTotal) %>%
+  gather(key=Area_type,value=Area,IntAreaTotal,pred)
+
+#plot fit
+ggplot(DataPredict,aes(x=frame,y=Area,color=Area_type,group=Experiment))+
+  geom_line(aes(group=Area_type),size=1)+
+  facet_wrap(.~Experiment,scales = "free")+
+  labs(title="Fit to the data")
+
+#plot residual
+ggplot(DataPredict,aes(x=frame,y=res,group=Experiment))+
+  geom_line(size=1)+
+  facet_wrap(.~Experiment,scales = "free")+
+  labs(title="Residuals")
+
+#plot coefficients
+# frame
+FitCoeff %>% filter(term=="frame") %>%
+ ggplot(aes(x=Experiment,y=estimate,fill=Strain,label = Experiment))+
   geom_bar(stat="identity", position=position_dodge())+
   geom_errorbar(aes(ymin=estimate-std.error, ymax=estimate+std.error), width=.2,
                 position=position_dodge(.9))+
   ylab("growth rate 1/min")+
   xlab("Experiment")+
+  labs(title="colonization rate estimate")+
   coord_flip()+
   theme_grey(base_size = 12)
 
-  
-# per model statistics
-glance<-by_experiment %>%
-  mutate(glance=map(model,broom::glance)) %>%
-  unnest(glance,.drop=TRUE) 
 
-glance$Experiment <- factor(glance$Experiment, levels =Coeff$Experiment)
-glance %>% ggplot(aes(y=r.squared,x=by_experiment$Experiment)) + 
+# Intersept
+FitCoeff %>% filter(term=="(Intercept)") %>%
+  ggplot(aes(x=Experiment,y=estimate,fill=Strain,label = Experiment))+
+  geom_bar(stat="identity", position=position_dodge())+
+  geom_errorbar(aes(ymin=estimate-std.error, ymax=estimate+std.error), width=.2,
+                position=position_dodge(.9))+
+  ylab("Intersept")+
+  xlab("Experiment")+
+  labs(title="colonization Intersept estimate")+
+  coord_flip()+
+  theme_grey(base_size = 12)
+
+# model quality extimate
+glance %>% separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
+  mutate(Strain=as.factor(Strain)) %>%
+  ggplot(aes(y=r.squared,x=Experiment, fill=Strain)) +
   geom_col()+
   xlab("Experiment")+
-  coord_flip()
+  coord_flip()+
+  labs(title="Quality of model fit R.squared")
 
 
 

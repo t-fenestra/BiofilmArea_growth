@@ -6,11 +6,13 @@ Tatyana Pichugina
 Integral area
 -------------
 
-Sum of the colonize pixel across all data frames.
+Integral area represent sum of the colonized pixel for each frame. Each frame represent one hour of experiment. Here we are interested in 15 first hours.
 
-![](Documentation_files/figure-markdown_github/Integral%20Area-1.png)
+![](Documentation_files/figure-markdown_github/introduce%20Integral%20area-1.png)
 
-#### After selection only first 15 frames
+#### Integlal area ALI and GALI
+
+We cutted each image to the two parts: ALI part include 200px (32mkm) layer counted from the ALI, and GALI part include rest part.
 
 ![](Documentation_files/figure-markdown_github/unnamed-chunk-1-1.png)
 
@@ -27,9 +29,9 @@ Sum of the colonize pixel across all data frames.
 
 #### SM sum of colonisation area
 
-![](Documentation_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](Documentation_files/figure-markdown_github/unnamed-chunk-3-1.png) \#\# Linear regression fit
 
 Colonisation area per Layer
 ---------------------------
 
-LayerSize=32 mkm (200px) ![](Documentation_files/figure-markdown_github/unnamed-chunk-4-1.png) \#\# Plot shows ratio between Area per Layer to total colonization area for different time frames ![](Documentation_files/figure-markdown_github/unnamed-chunk-5-1.png)![](Documentation_files/figure-markdown_github/unnamed-chunk-5-2.png)
+LayerSize=32 mkm (200px) ![](Documentation_files/figure-markdown_github/unnamed-chunk-5-1.png) \#\#\#\# Plot shows ratio between Area per Layer to total colonization area for different time frames ![](Documentation_files/figure-markdown_github/unnamed-chunk-6-1.png)![](Documentation_files/figure-markdown_github/unnamed-chunk-6-2.png) \#\#\#\# Gain-Lost-Same

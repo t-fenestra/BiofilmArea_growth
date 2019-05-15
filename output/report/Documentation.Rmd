@@ -15,17 +15,19 @@ library(gridExtra)
 library(stringr)
 library(modelr)
 library(broom)
+library(ggpubr)
 ```
 
 
 ## Integral area
-Sum of the colonize pixel across all data frames.
+Integral area represent sum of the colonized pixel for each frame. Each frame represent one hour of experiment. Here we are interested in 15 first hours.
 
 
-```{r Integral Area, echo=FALSE, message=FALSE, warning=FALSE}
+```{r read and filter data, echo=FALSE, message=FALSE, warning=FALSE}
 # read file 
 AreaY<-read_delim(file='../../data/ResultTable_SliceY.txt',col_names = TRUE,delim=',')
 
+# extract frame and strain type from the name 
 AreaY<-AreaY %>% 
   # new colums with strain
   separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
@@ -33,37 +35,66 @@ AreaY<-AreaY %>%
   # extract data frame
   mutate(frame=as.numeric(str_split(datafile,'_',simplify = TRUE)[,5]),data_stamp=as.numeric(str_split(datafile,'_',simplify = TRUE)[,3]))
 
+# take 15 hours of experiment
+AreaY<-AreaY %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
+
+```
+
+
+```{r introduce Integral area, echo=FALSE, message=FALSE, warning=FALSE}
+
 # Integral area
 IntegralArea<-AreaY %>%
   group_by(Strain,data_stamp,frame) %>%
-  summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),IntAreaLost=sum(SumSliceYlost),
-            IntAreaSame=sum(SumSliceYsame)) %>%
-  mutate(GainTotal=IntAreaGain/IntAreaTotal,LostTotal=IntAreaLost/IntAreaTotal,SameTotal=IntAreaSame/IntAreaTotal) %>%
+  summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),
+            IntAreaLost=sum(SumSliceYlost),IntAreaSame=sum(SumSliceYsame)) %>%
+  mutate(GainTotal=IntAreaGain/IntAreaTotal,LostTotal=IntAreaLost/IntAreaTotal,
+         SameTotal=IntAreaSame/IntAreaTotal) %>%
   filter(-IntAreaGain,-IntAreaLost,-IntAreaSame) %>%
-  gather(key=Area_type,value='Area',IntAreaTotal,GainTotal,LostTotal,SameTotal,factor_key = TRUE) 
+  gather(key=Area_type,value='Area',IntAreaTotal,GainTotal,LostTotal,SameTotal,factor_key = TRUE)
 
 
 IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
   ggplot(aes(x=frame,y=Area,color=Strain))+
   geom_line(aes(group=data_stamp),size=2)+
-  ggtitle('Sum of areas across all Y-layers ') + 
-  xlab("time frame in minutes") + ylab("Area")+
+  ggtitle('Integral area') + 
+  xlab("time frame in hours") + ylab("Area")+
   theme_bw(base_size = 12)
-
 ```
 
-#### After selection only first 15 frames
+
+####  Integlal area ALI and GALI
+
+We cutted each image to the two parts: ALI part includes 200px (32mkm) layer counted from the ALI, and  GALI part includes rest part of the image. 
+
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-AreaY<-AreaY %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
-IntegralArea <- IntegralArea %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
+IntegralArea_ALI<-AreaY %>%
+  filter(Layer<400 & frame>5) %>%
+  group_by(Strain,data_stamp,frame) %>%
+  summarise(IntAreaTotal=sum(SumSliceY)) 
 
-IntegralArea %>% filter(Area_type=='IntAreaTotal') %>% 
-  ggplot(aes(x=frame,y=Area,color=Strain))+
-  geom_line(aes(group=data_stamp),size=2)+
-  ggtitle('Sum of areas across all Y-layers ') + 
-  xlab("time frame in minutes") + ylab("Area")+
-  theme_bw(base_size = 12)
+PlotALI<-IntegralArea_ALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
+    geom_line(aes(group=data_stamp),size=2)+
+    ggtitle('Integral area ALI') + 
+    xlab("time frame in hours") + ylab("Area")+
+    theme_bw(base_size = 12)
+
+IntegralArea_GALI<-AreaY %>%
+  filter(Layer>200 & frame>5) %>%
+  group_by(Strain,data_stamp,frame) %>%
+  summarise(IntAreaTotal=sum(SumSliceY)) 
+
+PlotGALI<-IntegralArea_GALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
+    geom_line(aes(group=data_stamp),size=2)+
+    ggtitle('Integral area GALI') + 
+    xlab("time frame in minutes") + ylab("Area")+
+    theme_bw(base_size = 12)
+
+ggarrange(PlotALI,PlotGALI,ncol=2, nrow =1,common.legend = TRUE, legend="bottom")
+
 ```
+We fitted ALI and GALI separately by Log(Area)~A+B*frame. 
 
 #### Gain-Lost-Same summary per experiment
 1. GainTotal represents proportion of pixels that appear new between consecutive frames to the total number occupied pixels.
@@ -93,82 +124,37 @@ IntegralArea %>% filter(Strain=='SM') %>%
   
 ```
 ## Linear regression fit
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+
 # model LogIntArea ~ Intersept + frame
 fit_lm<-function(df){
-  lm(log(Area)~frame,data=df)
+  lm(log(IntAreaTotal)~frame,data=df)
 }
 
-
-## nest data by experiments
-by_experiment<-IntegralArea %>%
-  filter(Area_type=="IntAreaTotal" & Area>0) %>%
-  ungroup(data_stamp) %>%
-  select(-data_stamp,-Area_type) %>%
-  mutate(frame=60*frame) %>%
-  group_by(Experiment) %>%
-  nest()
+LinearRegressionFit(df)
+  }
+  
 
 
 
 
-# calculate approximation coefficients
-by_experiment <- by_experiment %>% 
-  mutate(model = map(data, fit_lm)) %>%
-  mutate(resids = map2(data,model, add_residuals)) %>%
-  mutate(predict = map2(data,model, add_predictions))
+
+
+
   
   
-DataPredict<-by_experiment %>% 
-  unnest(predict) %>%
-  mutate(pred=exp(pred)) %>%
-  mutate(res=pred-Area) %>%
-  gather(key="Area_type",value="Area",Area,pred,factor_key = TRUE) 
-  
-# plot fit to the data  
-ggplot(DataPredict,aes(x=frame,y=Area,color=Area_type,group=Experiment))+
-    geom_line(aes(group=Area_type),size=1)+
-    facet_wrap(.~Experiment)+
-    labs(title="Fit to the data")
 
-#plot residuals
-ggplot(DataPredict,aes(x=frame,y=res,group=Experiment))+
-  geom_line(size=1)+
-  facet_wrap(.~Experiment)+
-  labs(title="Residuals")
 
-# coefficients
-Coeff<-by_experiment %>%
-  mutate(tidy_model=map(model,broom::tidy)) %>%
-  unnest(tidy_model) %>%
-  filter(term=="frame") %>%
-  arrange(estimate) %>%
-  separate(Experiment,c('Strain'),sep='_',remove=FALSE,extra="drop") %>%
-  mutate(Strain=as.factor(Strain))
+
  
 
-  ggplot(Coeff,aes(x=Experiment,y=estimate,fill=Strain,label = Experiment))+
-  geom_bar(stat="identity", position=position_dodge())+
-  geom_errorbar(aes(ymin=estimate-std.error, ymax=estimate+std.error), width=.2,
-                position=position_dodge(.9))+
-  ylab("growth rate 1/min")+
-  xlab("Experiment")+
-  labs(title="Growth rate estimate")
-  coord_flip()+
-  theme_grey(base_size = 12)
+ 
 
   
-# per model statistics
-glance<-by_experiment %>%
-  mutate(glance=map(model,broom::glance)) %>%
-  unnest(glance,.drop=TRUE) 
 
-glance$Experiment <- factor(glance$Experiment, levels =Coeff$Experiment)
-glance %>% ggplot(aes(y=r.squared,x=by_experiment$Experiment)) + 
-  geom_col()+
-  xlab("Experiment")+
-  coord_flip()|+
-  labs(title="Quality of model fit R.squared")
+
 ```
 
 ## Colonisation area per Layer 

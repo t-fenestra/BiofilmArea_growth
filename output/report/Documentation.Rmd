@@ -1,8 +1,12 @@
 ---
 title: "Biofilm colonisation area calculation"
-author: "Tatyana Pichugina"
-date: "5/13/2019"
-output: github_document
+author: "Andres Diaz,Tatyana Pichugina, Paul Rainey"
+date: "5/16/2019"
+output: 
+  pdf_document:
+        toc: true
+        toc_depth: 2
+
 #pdf_document
 # github_document
 ---
@@ -66,7 +70,7 @@ IntegralArea %>% filter(Area_type=='IntAreaTotal') %>%
 ```
 
 
-####  Integlal area ALI and GALI
+##  Integlal area ALI and GALI
 
 We cutted each image to the two parts: ALI part includes 200px (32mkm) layer counted from the ALI, and  GLI part includes rest part of the image. 
 The integral area per Strain expreriment is shown below.
@@ -132,9 +136,9 @@ LinearRegressionFit(IntegralArea_ALI,"Integral Area ALI")
 
 LayerSize=32 mkm (200px)
 
-```{r echo=FALSE,message=FALSE, warning=FALSE,}
+```{r fig.width=6, fig.height=8,echo=FALSE,message=FALSE, warning=FALSE,}
 ggplot(AreaY,aes(x=frame,y=SumSliceY,color=Strain))+
-  geom_line(aes(group=Experiment),size=2)+facet_grid(Layer~.)+
+  geom_line(aes(group=Experiment),size=1)+facet_grid(Layer~.)+
   theme_bw(base_size = 10)+
   labs(title="Area per layer from ALI")+
   ylab("Area per Layer")

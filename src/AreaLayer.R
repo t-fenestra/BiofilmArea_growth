@@ -80,10 +80,6 @@ AreaY %>% filter(Strain=='SM') %>%
   facet_grid(frame~data_stamp)
 
 
-
-
-
-
 AreaY %>% filter(SumSliceY!=0 & Strain=='SM') %>%
   mutate(GainTotal=SumSliceYgain/SumSliceY,LostTotal=-SumSliceYlost/SumSliceY,SameTotal=SumSliceYsame/SumSliceY) %>%
   select(-SumSliceYgain,-SumSliceYlost,-SumSliceYsame,-SameTotal) %>%

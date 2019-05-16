@@ -3,6 +3,8 @@ title: "Biofilm colonisation area calculation"
 author: "Tatyana Pichugina"
 date: "5/13/2019"
 output: github_document
+#pdf_document
+# github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -16,6 +18,7 @@ library(stringr)
 library(modelr)
 library(broom)
 library(ggpubr)
+
 ```
 
 
@@ -45,7 +48,7 @@ AreaY<-AreaY %>% filter(frame %in% seq(from=1,to=15,by=1)) # frame 1-15
 
 # Integral area
 IntegralArea<-AreaY %>%
-  group_by(Strain,data_stamp,frame) %>%
+  group_by(Strain,Experiment,data_stamp,frame)  %>%
   summarise(IntAreaTotal=sum(SumSliceY),IntAreaGain=sum(SumSliceYgain),
             IntAreaLost=sum(SumSliceYlost),IntAreaSame=sum(SumSliceYsame)) %>%
   mutate(GainTotal=IntAreaGain/IntAreaTotal,LostTotal=IntAreaLost/IntAreaTotal,
@@ -65,13 +68,14 @@ IntegralArea %>% filter(Area_type=='IntAreaTotal') %>%
 
 ####  Integlal area ALI and GALI
 
-We cutted each image to the two parts: ALI part includes 200px (32mkm) layer counted from the ALI, and  GALI part includes rest part of the image. 
+We cutted each image to the two parts: ALI part includes 200px (32mkm) layer counted from the ALI, and  GLI part includes rest part of the image. 
+The integral area per Strain expreriment is shown below.
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 IntegralArea_ALI<-AreaY %>%
   filter(Layer<400 & frame>5) %>%
-  group_by(Strain,data_stamp,frame) %>%
+  group_by(Strain,Experiment,data_stamp,frame) %>%
   summarise(IntAreaTotal=sum(SumSliceY)) 
 
 PlotALI<-IntegralArea_ALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
@@ -80,119 +84,88 @@ PlotALI<-IntegralArea_ALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
     xlab("time frame in hours") + ylab("Area")+
     theme_bw(base_size = 12)
 
-IntegralArea_GALI<-AreaY %>%
+IntegralArea_GLI<-AreaY %>%
   filter(Layer>200 & frame>5) %>%
-  group_by(Strain,data_stamp,frame) %>%
+  group_by(Strain,Experiment,data_stamp,frame) %>%
   summarise(IntAreaTotal=sum(SumSliceY)) 
 
-PlotGALI<-IntegralArea_GALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
+PlotGLI<-IntegralArea_GLI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
     geom_line(aes(group=data_stamp),size=2)+
-    ggtitle('Integral area GALI') + 
+    ggtitle('Integral area GLI') + 
     xlab("time frame in minutes") + ylab("Area")+
     theme_bw(base_size = 12)
 
-ggarrange(PlotALI,PlotGALI,ncol=2, nrow =1,common.legend = TRUE, legend="bottom")
+ggarrange(PlotALI,PlotGLI,ncol=2, nrow =1,common.legend = TRUE, legend="bottom")
 
 ```
+
 We fitted ALI and GALI separately by Log(Area)~A+B*frame. 
 
-#### Gain-Lost-Same summary per experiment
-1. GainTotal represents proportion of pixels that appear new between consecutive frames to the total number occupied pixels.
-2. LostTotal is a proportion of pixels that lost between two consecutive frames to the total number occupied pixels.
-3. SameTotal is a proportion of pixels that stays at the same place between two consecutive frames to the total number occupied pixels.
-4. IntAreaTotal is a total occupied area.
-
-#### dwss sum of colonisation area
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-IntegralArea %>% filter(Strain=='dwss') %>%
-  ggplot(aes(x=frame,y=Area))+
-  geom_line(size=1)+
-  facet_grid(Area_type~data_stamp,scales="free_y")+
-  ggtitle('dwss Sum of areas across all Y-layers ') + 
-  xlab("time frame in minutes") + ylab("Area")
- 
+
+fit_lm<-function(df) lm(log(IntAreaTotal)~frame,data=df)
+source("../../src/LinearRegresionFit.R")
+LinearRegressionFit(IntegralArea_GLI,"Integral Area GLI")
+LinearRegressionFit(IntegralArea_ALI,"Integral Area ALI")
 ```
 
-#### SM sum of colonisation area 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-IntegralArea %>% filter(Strain=='SM') %>%
-  ggplot(aes(x=frame,y=Area))+
-  geom_line(aes(group=data_stamp),size=1)+
-  facet_grid(Area_type~data_stamp,scales="free_y")+
-  ggtitle('SM Sum of areas across all Y-layers ') + 
-  xlab("time frame in minutes") + ylab("Area")
-  
-```
-## Linear regression fit
 
-```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+<!-- #### Gain-Lost-Same summary per experiment -->
+<!-- 1. GainTotal represents proportion of pixels that appear new between consecutive frames to the total number occupied pixels. -->
+<!-- 2. LostTotal is a proportion of pixels that lost between two consecutive frames to the total number occupied pixels. -->
+<!-- 3. SameTotal is a proportion of pixels that stays at the same place between two consecutive frames to the total number occupied pixels. -->
+<!-- 4. IntAreaTotal is a total occupied area. -->
 
+<!-- %#### dwss sum of colonisation area -->
+<!-- ```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE} -->
+<!-- IntegralArea %>% filter(Strain=='dwss') %>% -->
+<!--   ggplot(aes(x=frame,y=Area))+ -->
+<!--   geom_line(size=1)+ -->
+<!--   facet_grid(Area_type~data_stamp,scales="free_y")+ -->
+<!--   ggtitle('dwss Sum of areas across all Y-layers ') +  -->
+<!--   xlab("time frame in minutes") + ylab("Area") -->
 
-# model LogIntArea ~ Intersept + frame
-fit_lm<-function(df){
-  lm(log(IntAreaTotal)~frame,data=df)
-}
+<!-- ``` -->
 
-LinearRegressionFit(df)
-  }
-  
-
-
-
-
-
-
-
-  
-  
-
-
-
- 
-
- 
-
-  
-
-
-```
 
 ## Colonisation area per Layer 
+
 LayerSize=32 mkm (200px)
-```{r fig.height=14, fig.width=10, echo=FALSE,message=FALSE, warning=FALSE}
+
+```{r echo=FALSE,message=FALSE, warning=FALSE,}
 ggplot(AreaY,aes(x=frame,y=SumSliceY,color=Strain))+
-  geom_line(aes(group=Experiment),size=1)+facet_grid(Layer~.)+
+  geom_line(aes(group=Experiment),size=2)+facet_grid(Layer~.)+
   theme_bw(base_size = 10)+
   labs(title="Area per layer from ALI")+
   ylab("Area per Layer")
 ```
-#### Plot shows ratio  between Area per Layer to total colonization area for different time frames
-```{r,fig.height=14, fig.width=12,echo=FALSE,message=FALSE, warning=FALSE}
-AreaTotal<-AreaY %>% group_by(data_stamp,frame,Strain) %>%
-    summarise(AreaTotal=sum(SumSliceY))
+<!-- #### Plot shows ratio  between Area per Layer to total colonization area for different time frames -->
+<!-- ```{r,fig.height=14, fig.width=12,echo=FALSE,message=FALSE, warning=FALSE} -->
+<!-- AreaTotal<-AreaY %>% group_by(data_stamp,frame,Strain) %>% -->
+<!--     summarise(AreaTotal=sum(SumSliceY)) -->
 
-AreaYSumSliceY<-AreaY %>% select(data_stamp,Strain,Layer,frame,SumSliceY) %>%
-  inner_join(AreaTotal,by=c("data_stamp","frame","Strain")) %>% 
-  filter(AreaTotal!=0) %>% 
-  mutate(Ratio=SumSliceY/AreaTotal) 
+<!-- AreaYSumSliceY<-AreaY %>% select(data_stamp,Strain,Layer,frame,SumSliceY) %>% -->
+<!--   inner_join(AreaTotal,by=c("data_stamp","frame","Strain")) %>%  -->
+<!--   filter(AreaTotal!=0) %>%  -->
+<!--   mutate(Ratio=SumSliceY/AreaTotal)  -->
 
 
-AreaYSumSliceY %>% filter(Strain=='dwss') %>%
-  ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+
-  scale_x_reverse()+
-  coord_flip()+
-  facet_grid(frame~data_stamp)+
-  ggtitle('dwss ratio')+
-  theme_gray(base_size = 10)
-  
-AreaYSumSliceY %>% filter(Strain=='SM') %>%
-  ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+
-  scale_x_reverse()+
-  coord_flip()+
-  facet_grid(frame~data_stamp)+
-  ggtitle('SM ratio')+
-  theme_gray(base_size = 10)
-```
-#### Gain-Lost-Same
+<!-- AreaYSumSliceY %>% filter(Strain=='dwss') %>% -->
+<!--   ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+ -->
+<!--   scale_x_reverse()+ -->
+<!--   coord_flip()+ -->
+<!--   facet_grid(frame~data_stamp)+ -->
+<!--   ggtitle('dwss ratio')+ -->
+<!--   theme_gray(base_size = 10) -->
+
+<!-- AreaYSumSliceY %>% filter(Strain=='SM') %>% -->
+<!--   ggplot(aes(x=Layer,y=Ratio),color=as.numeric(Layer))+geom_bar(size=1,stat="identity",fill="darkblue")+ -->
+<!--   scale_x_reverse()+ -->
+<!--   coord_flip()+ -->
+<!--   facet_grid(frame~data_stamp)+ -->
+<!--   ggtitle('SM ratio')+ -->
+<!--   theme_gray(base_size = 10) -->
+<!-- ``` -->
+
 
 

@@ -2,13 +2,14 @@
 title: "Biofilm colonisation area calculation"
 author: "Andres Diaz,Tatyana Pichugina, Paul Rainey"
 date: "5/16/2019"
-output: 
-  pdf_document:
-        toc: true
-        toc_depth: 2
+output:
+  github_document
+  #pdf_document:
+  #      toc: true
+  #      toc_depth: 2
 
 #pdf_document
-# github_document
+ 
 ---
 
 ```{r setup, include=FALSE}
@@ -89,7 +90,7 @@ PlotALI<-IntegralArea_ALI %>% ggplot(aes(x=frame,y=IntAreaTotal,color=Strain))+
     theme_bw(base_size = 12)
 
 IntegralArea_GLI<-AreaY %>%
-  filter(Layer>200 & frame>5) %>%
+  filter(Layer>200 & frame>10) %>%
   group_by(Strain,Experiment,data_stamp,frame) %>%
   summarise(IntAreaTotal=sum(SumSliceY)) 
 
@@ -109,8 +110,25 @@ We fitted ALI and GALI separately by Log(Area)~A+B*frame.
 
 fit_lm<-function(df) lm(log(IntAreaTotal)~frame,data=df)
 source("../../src/LinearRegresionFit.R")
-LinearRegressionFit(IntegralArea_GLI,"Integral Area GLI")
-LinearRegressionFit(IntegralArea_ALI,"Integral Area ALI")
+FitCoeff_GLI<-LinearRegressionFit(IntegralArea_GLI,"Integral Area GLI")
+FitCoeff_GLI<-FitCoeff_GLI %>% mutate(type="GLI")
+FitCoeff_ALI<-LinearRegressionFit(IntegralArea_ALI,"Integral Area ALI")
+FitCoeff_ALI<-FitCoeff_ALI %>% mutate(type="ALI")
+
+FitCoeff<-bind_rows(FitCoeff_GLI,FitCoeff_ALI) %>% mutate(Itype=as.factor(type))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+FitCoeff %>% filter(term=="frame") %>%
+    ggplot(aes(x=Strain,y=estimate, fill=type))+
+    geom_boxplot()+
+    scale_fill_manual(values=c("#b2df8a", "lightblue"))+
+    geom_hline(yintercept=0, linetype="dashed", color = "black", size=1)+
+    ylab("colonisation rate 1/min")+
+    xlab("Strain")+
+    labs(title="Colonization rate for ALI and GLI")+
+    theme_grey(base_size = 12)
+
 ```
 
 

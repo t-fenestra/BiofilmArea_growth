@@ -33,6 +33,7 @@ LinearRegressionFit<-function(df,file_prefix){
   
   #======================================
   # 5. plot fit to the data and residuals
+  
   DataPredict<-by_experiment %>%
     unnest(predict) %>%
     mutate(pred=exp(pred)) %>%
@@ -115,5 +116,5 @@ LinearRegressionFit<-function(df,file_prefix){
     theme_grey(base_size = 12)
   print(p)
   
-  
+  return(FitCoeff)
 }

@@ -218,7 +218,14 @@ A<-FitCoeffLayerTotal %>% filter(term=="(Intercept)") %>%
   facet_grid(cols =vars(Layer), scales = "fixed")
 print(A)
 ```  
-
+### Occupation proportion
+```{r echo=FALSE, message=FALSE, warning=FALSE,}
+AreaY %>% group_by(Experiment,frame) %>% mutate(SumYTotal=sum(SumSliceY)) %>%
+  mutate(SumSliceYProp=ifelse(SumYTotal>0,SumSliceY/SumYTotal,0)) %>%
+  ggplot(aes(x=frame,y=SumSliceYProp,color=as.factor(Layer)))+
+  geom_point(aes(group=data_stamp),size=2)+facet_wrap(~Experiment)+
+  theme_bw()
+```
 
 <!-- #### Plot shows ratio  between Area per Layer to total colonization area for different time frames -->
 <!-- ```{r,fig.height=14, fig.width=12,echo=FALSE,message=FALSE, warning=FALSE} -->

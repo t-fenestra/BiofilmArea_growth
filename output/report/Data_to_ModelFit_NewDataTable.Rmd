@@ -1,0 +1,277 @@
+---
+title: "Fit the biofilm colonisation area with a stationary solution from the model"
+author: "Andres Diaz,Tatyana Pichugina, Paul Rainey"
+date: "7/02/2019"
+output:
+  github_document
+  #pdf_document:
+  #      toc: true
+  #      toc_depth: 2
+
+#pdf_document
+ 
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dplyr)
+library(ggridges)
+library(gridExtra)
+library(stringr)
+library(modelr)
+library(broom)
+library(ggpubr)
+
+source("../../src/LinearRegresionFit.R")
+source("../../src/LinearRegresionFit_perLayer.R")
+
+```
+
+```{r Load Data, echo=FALSE, message=FALSE, warning=FALSE}
+# read file from mpistaff drive
+Data<-read_delim(file='/Volumes/mpistaff/Diaz_Pichugina_Pseudomona/Data/1-TIMELAPSES_2019_1-1__Results/AllData06_20_2019_461-TIMELAPSES_2019_1-1__Results/SM_dwss_all.csv',col_names = TRUE,delim=',')
+
+# one pixel per mkm
+# add column with data stamp
+# extract frame and strain type from the name
+Data<-Data %>% 
+  # new colums with strain
+  mutate(strain=as.factor(strain) )%>%
+  mutate(data_stamp=ifelse(strain=="SM",substr(FILE,16,28),substr(FILE,16,30))) %>%
+  # filter probe
+  filter((X!=0 & Y!=9.5)) 
+
+# rename column with complex name
+colnames(Data)[str_detect(colnames(Data),"Surface")]<-"SurfaceMkm"
+colnames(Data)[colnames(Data)=="Nb of obj. voxels"]<-"SurfacePx"
+OnePixelinMkm<-Data$SurfaceMkm[1]/Data$SurfacePx[1]*10
+
+#Bounding box: smallest box encompassing the object: if this box is ticked,
+#the coordinates of the upper left corner of the box, its width, height and depth
+#are retrieved and logged
+colnames(Data)[colnames(Data)=="B-width"]<-"BoxWidth"
+colnames(Data)[colnames(Data)=="B-height"]<-"BoxHight"
+
+# reduce number of colums
+DataF<-Data %>% select(data_stamp,strain,interval,SurfacePx,X,Y,BX,BY,BoxWidth,BoxHight)
+
+# take 15 hours of experiment, filter probe
+DataF<-DataF %>% filter(interval %in% seq(from=3,to=15,by=1))
+```
+
+
+
+## Total integral area
+Integral area represent sum of the colonized pixel for each frame. Each frame represent one hour of experiment. Here we are interested in 15 first hours.
+
+
+```{r Total Integral Area, echo=FALSE, message=FALSE, warning=FALSE,fig.cap = "Total_Integral_Area"}
+DataSumInt<-DataF %>% group_by(strain,data_stamp,interval) %>%
+  summarise(IntAreaTotal=sum(SurfacePx)) %>%
+  # transfer to the mkm^2
+  mutate(IntAreaTotal=IntAreaTotal*OnePixelinMkm*OnePixelinMkm)
+
+ggplot(DataSumInt,aes(x=interval,y=IntAreaTotal,group=data_stamp,color=strain)) +
+  geom_line(size=1)+
+  scale_color_manual(values = c("dwss" = "#e41a1c", "SM" = "#377eb8"))+
+  ggtitle('Total integral area')+
+  xlab("time in hour") + ylab("Colonized area mkm^2")+
+  theme_bw(base_size = 12)
+
+```
+## Total integral area was fitted by Log(Area)~A+B*time
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.cap = "Integral_Area_Fit_results"}
+DataSumInt <- DataSumInt %>% rename(frame=interval,Experiment=data_stamp,Strain=strain) 
+
+fit_lm<-function(df) lm(log(IntAreaTotal)~frame,data=df)
+FitCoeff<-LinearRegressionFit(DataSumInt,"Integral Colonisation Area")
+
+```
+
+```{r Ali position, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# binning data on x axis (8 layers), choose point with min Bounding box BY
+Data_Binned<-DataF %>% mutate(BX_binned=cut(BX, 8,left=FALSE,right=TRUE)) %>%
+            group_by(data_stamp,interval,BX_binned) %>%
+            summarise(ALI=min(BY)) 
+
+# binning data 
+Data_Binned %>% ggplot(aes(x=BX_binned,y=ALI,color=interval))+
+  geom_point()+facet_wrap(~data_stamp)+scale_y_reverse()+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# estimate position as 0.01 quantile
+EstimateALI<-Data_Binned %>% group_by(data_stamp) %>% summarise(QALI=quantile(ALI,0.01))
+
+# compare with min edge of bounding box histogramme
+Data_Binned<-left_join(Data_Binned,EstimateALI)
+Data_Binned %>% filter(ALI<500) %>% ggplot(aes(x=ALI))+
+  geom_histogram()+geom_vline(aes(xintercept = QALI),color="red")+
+facet_wrap(~data_stamp)
+            
+# add to the filtered data
+DataF<-left_join(DataF,EstimateALI)
+DataF <- DataF %>% mutate(Y=Y-QALI)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+## Check how good the ALI position was estimated
+#library(magick)
+#images_folder<-'/Volumes/mpistaff/Diaz_Pichugina_Pseudomona/Data/1-TIMELAPSES_2019_1-1__Results/Test_ALI_position/'
+#list_experiments<-unique(DataF$data_stamp)
+#list_experiments_file<-map(list_experiments,paste,"_FR_PJ.tif",sep="")
+#list_experiments_output<-map(list_experiments,paste,"_FR_PJ_ALI.avi",sep="")
+
+#for(i in seq(1:length(list_experiments))){
+#    print(i)
+#    file_name<-paste(images_folder,list_experiments_file[i],sep="")
+#    ALI=round(filter(DataF,data_stamp==list_experiments[i])$QALI[1])
+
+#    # Produce image  with ALI-line 
+#    Image<-image_read(file_name) %>%
+#          image_annotate("experiment",gravity='northwest',color = "white") %>%
+#          image_draw()
+#          abline(h=ALI,col="red",lwd=5)
+#          dev.off()
+#    # Write to the file
+#    file_name_output<-paste(images_folder,list_experiments_output[i])  
+ #   image_write(Image,path=file_name_output)  
+#}
+```
+## Colonisation area per Layer 
+LayerSize=64 mkm (400px)
+
+```{r echo=FALSE,message=FALSE, warning=FALSE,fig.cap = "Area_per_Layer"}
+DataLayer<-DataF %>% mutate(Y=Y*OnePixelinMkm) %>% mutate(Layer=cut(Y, seq(0,2048*OnePixelinMkm,400*OnePixelinMkm),right = TRUE,left=TRUE)) %>% 
+                    filter(Layer!="NA") %>% group_by(strain,data_stamp,interval,Layer) %>%
+                    summarise(SumSliceY=sum(SurfacePx))
+
+ggplot(DataLayer,aes(x=interval,y=SumSliceY*OnePixelinMkm*OnePixelinMkm,group=data_stamp,color=strain))+facet_grid(Layer~.)+
+  scale_color_manual(values = c("dwss" = "#e41a1c", "SM" = "#377eb8"))+
+  geom_line(size=1)+
+  ggtitle('Colonized area per Layer')+
+  xlab("time in hour") + ylab("Colonized area in mkm^2")+
+  theme_bw(base_size = 12)+
+  theme_bw()
+
+```
+## Linear regression fit separetely for each layer
+```{r fig.width=6, fig.height=8,echo=FALSE,message=FALSE, warning=FALSE,fig.cap = "Area_per_Layer_Fit_Results"}
+DataLayer<-DataLayer %>% rename(frame=interval,Experiment=data_stamp,Strain=strain) 
+nest_by_layer<-DataLayer %>% group_by(Layer) %>%
+          nest()
+
+#first data frame
+i=1
+CurrentLayer<-nest_by_layer$Layer[i]
+FitCoeffLayer<-LinearRegresionFit_perLayer(nest_by_layer$data[[i]],as.character(CurrentLayer))
+FitCoeffLayerTotal<-FitCoeffLayer %>% mutate(Layer=CurrentLayer)
+
+for(i in 2:nrow(nest_by_layer)){
+  CurrentLayer<-nest_by_layer$Layer[i]
+  FitCoeffLayer<-LinearRegresionFit_perLayer(nest_by_layer$data[[i]],as.character(CurrentLayer))
+  FitCoeffLayer <-FitCoeffLayer %>% mutate(Layer=CurrentLayer)
+  FitCoeffLayerTotal<-bind_rows(FitCoeffLayerTotal,FitCoeffLayer) 
+}
+```
+
+```{r fig.width=8, fig.height=6,echo=FALSE,message=FALSE, warning=FALSE,fig.cap = "Area_per_Layer_Fit_Results"}
+FitCoeffLayerTotal %>% filter(term=="frame") %>% 
+  ggplot(aes(x=Strain.x,y=estimate, fill=Strain.x))+
+  geom_boxplot()+
+  geom_dotplot(binaxis='y', stackdir='center', dotsize=0.1)+
+  geom_jitter(shape=16, position=position_jitter(0.2))+
+  geom_hline(yintercept=0, linetype="dashed", color = "darkgrey", size=1)+
+  ylab("colonisation rate 1/min")+
+  xlab("Layer in mkm")+
+  labs(title="Colonization rate per Layer")+
+  theme_classic(base_size = 10)+
+  theme(axis.text.x = element_blank(),axis.ticks=element_blank())+
+  scale_fill_manual(values = c("dwss" = "#e41a1c", "SM" = "#377eb8"))+
+  facet_grid(cols =vars(Layer), scales = "fixed",switch="x")
+
+```
+## Quality of the fit per Layer: R^2 per experiment
+```{r fig.width=10, fig.height=6, echo=FALSE,message=FALSE, warning=FALSE,fig.cap = "Area_per_Layer_Fit_Results_R2"}
+A<-FitCoeffLayerTotal %>% filter(term=="frame") %>% 
+  ggplot(aes(x=Experiment,y=r.squared,fill=Strain.x,label = Experiment))+
+  geom_bar(stat="identity", position=position_dodge())+
+  geom_errorbar(aes(ymin=r.squared-std.error, ymax=r.squared+std.error), width=.2,
+                  position=position_dodge(.9))+
+  scale_fill_manual(values = c("dwss" = "#e41a1c", "SM" = "#377eb8"))+
+  ylab("r.squared")+
+  xlab("Layer")+
+  labs(title="R^2")+
+  coord_flip()+
+  theme_bw(base_size = 8)+
+  facet_grid(cols =vars(Layer), scales = "fixed")
+print(A)
+```
+## Quality of the fit per Layer: Intersept per experiment
+```{r fig.width=10, fig.height=6, echo=FALSE,message=FALSE, warning=FALSE,fig_cap="Area_per_Layer_Fit_Results_Intersept"}
+A<-FitCoeffLayerTotal %>% filter(term=="(Intercept)") %>% 
+  ggplot(aes(x=Experiment,y=estimate,fill=Strain.x,label = Experiment))+
+  geom_bar(stat="identity", position=position_dodge())+
+  geom_errorbar(aes(ymin=r.squared-std.error, ymax=r.squared+std.error), width=.2,
+                  position=position_dodge(.9))+
+  scale_fill_manual(values = c("dwss" = "#e41a1c", "SM" = "#377eb8"))+
+  ylab("intersept")+
+  xlab("Layer")+
+  labs(title="Intersept")+
+  coord_flip()+
+  theme_bw(base_size = 8)+
+  facet_grid(cols =vars(Layer), scales = "fixed")
+print(A)
+```  
+## Occupation proportion per experiment
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.cap="Occupancy_percent_Layer"}
+# create color palette
+library(RColorBrewer)
+myColors <-c("#b2182b","#d6604d","#92c5de","#4393c3","#2166ac")
+names(myColors) <- levels(DataLayer$Layer)
+
+
+DataLayer %>% filter(Strain=="dwss") %>% group_by(Experiment,frame) %>% mutate(SumYTotal=sum(SumSliceY)) %>%
+  mutate(SumSliceYProp=ifelse(SumYTotal>0,SumSliceY/SumYTotal,0)) %>%
+  ggplot(aes(x=frame,y=SumSliceYProp,color=as.factor(Layer)))+
+  geom_line(aes(group=Layer),size=1)+facet_wrap(~Experiment)+
+  scale_colour_manual(name = "Layer",values = myColors)+
+  labs(title="Occupancy percent per Layer")+
+  ylab("Occupancy percent")+
+  xlab("time in hour")+
+  theme_bw()
+
+
+DataLayer %>% filter(Strain=="SM") %>% group_by(Experiment,frame) %>% mutate(SumYTotal=sum(SumSliceY)) %>%
+  mutate(SumSliceYProp=ifelse(SumYTotal>0,SumSliceY/SumYTotal,0)) %>%
+  ggplot(aes(x=frame,y=SumSliceYProp,color=as.factor(Layer)))+
+  geom_line(aes(group=Layer),size=1)+facet_wrap(~Experiment)+
+  labs(title="Occupancy percent per Layer")+
+  scale_colour_manual(name = "Layer",values = myColors)+
+  ylab("Occupancy percent")+
+  xlab("time in hour")+
+  theme_bw()
+
+
+
+```
+
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE,echo=FALSE}
+#DataF %>% filter(Y>1000 & Y<2000) %>% ggplot(aes(x=interval,y=SurfacePx,group=data_stamp))+facet_wrap(~data_stamp,scales="free")+
+#  geom_line(size=1)
+
+#for (i in unique(DataF$data_stamp)) {
+#  PlotHist<-DataLayer %>% filter(data_stamp== i) %>% ggplot(aes(x=interval,y=SurfacePx, group=interval, #fill=strain))+
+#  geom_violin()+facet_wrap(Ybinned~data_stamp,scales="free")
+#  print(PlotHist)
+}
+```
+
+
+
+
+
+
+
